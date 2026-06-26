@@ -1,0 +1,254 @@
+# ---------------------------------------------------------------------------
+# Demo workloads
+# ---------------------------------------------------------------------------
+images:
+  httpServer: kcd-kl-2026-http-server:dev
+  grpcServer: kcd-kl-2026-grpc-server:dev
+  dashboard: kcd-kl-2026-dashboard:dev
+  client: kcd-kl-2026-client:dev
+  pullPolicy: IfNotPresent
+
+# Inject the Linkerd proxy into the meshed workloads (everything except the
+# deliberately-unmeshed client). Set false to run the whole demo without a mesh.
+mesh:
+  enabled: true
+
+httpServer:
+  replicas: 3
+
+grpcServer:
+  replicas: 2 # per version (v1 and v2)
+
+# Gateway API GRPCRoute weights — the canary. Shift live with `make canary`.
+canary:
+  v1Weight: 90
+  v2Weight: 10
+
+dashboard:
+  replicas: 1
+
+# The traffic clients (client-http, client-grpc-meshed, client-grpc-unmeshed).
+# Their send rate is steered live by the dashboard's throughput control, so there
+# is no rate here — just an on/off toggle.
+clients:
+  enabled: true
+
+# Require meshed mTLS identity to reach grpc-server. Toggle live from the
+# dashboard's "Authorization policy" button (see liveControls), or set it here.
+authorization:
+  enabled: false
+
+# In-dashboard controls that act on the cluster: the "Sniff the wire" capture and
+# the authorization apply/remove toggle. Grants the dashboard's ServiceAccount the
+# RBAC to debug grpc-server pods and manage policy.linkerd.io resources.
+liveControls:
+  enabled: true
+
+# Linkerd control-plane namespace — used by the Prometheus scrape config.
+linkerd:
+  namespace: linkerd
+
+# Fallback URLs for the dashboard's "Prometheus" / "Grafana" buttons when ingress
+# is disabled (the `make prom` / `make grafana` port-forward URLs). When ingress is
+# enabled (below), the buttons use the ingress hosts instead. A button is enabled
+# only when its subchart is enabled below.
+observability:
+  prometheusUrl: "http://localhost:9090"
+  grafanaUrl: "http://localhost:3001"
+
+# Expose the dashboard, Prometheus and Grafana through Traefik Ingress so they are
+# reachable in a browser without `kubectl port-forward`. Hostnames are
+# demo.<host>, prometheus.<host>, grafana.<host>. With host "localhost",
+# Chrome/Firefox resolve *.localhost to 127.0.0.1 (no /etc/hosts needed).
+# Requires the k3d loadbalancer to publish host port 80 (see docs/deployment.md).
+ingress:
+  enabled: true
+  className: traefik
+  host: localhost
+
+# ---------------------------------------------------------------------------
+# Prometheus subchart (prometheus-community/prometheus)
+# Toggle with prometheus.enabled. When on, it scrapes the Linkerd proxies and
+# control plane via extraScrapeConfigs below.
+# ---------------------------------------------------------------------------
+prometheus:
+  enabled: true
+
+  # Trim most bundled extras, but KEEP kube-state-metrics: the Linkerd dashboards'
+  # $workload / $pod variables resolve via kube_deployment_labels, and the control
+  # plane's "Restarts" panel needs kube_pod_container_status_restarts_total. Without
+  # it those variables are empty and most panels read "No data".
+  alertmanager:
+    enabled: false
+  prometheus-pushgateway:
+    enabled: false
+  prometheus-node-exporter:
+    enabled: false
+  kube-state-metrics:
+    enabled: true
+    # KSM emits no kube_*_labels SERIES unless a label allowlist is set (only the
+    # HELP/TYPE headers). The dashboards' $workload variable is
+    # label_values(kube_deployment_labels, deployment), so it stays empty — and
+    # every workload-scoped panel reads "No data" — until we allowlist these.
+    metricLabelsAllowlist:
+      - deployments=[*]
+      - pods=[*]
+
+  extraFlags:
+  - web.enable-lifecycle
+  - web.enable-remote-write-receiver
+  
+  securityContext:
+    runAsUser: 0
+    runAsNonRoot: false
+    runAsGroup: 0
+    fsGroup: 0
+
+  server:
+    # The global scrape config lives under server.global in THIS chart — a
+    # top-level `global:` is Helm's cross-subchart namespace and is ignored here,
+    # leaving the chart default of 1m. At 1m, rate(metric[~1m]) has a single sample
+    # and can't be computed, which blanks every rate-based Grafana panel. 15s gives
+    # the dashboards 4 samples/min.
+    global:
+      scrape_interval:     15s
+      scrape_timeout:      10s
+      evaluation_interval: 15s
+    persistentVolume:
+      enabled: false
+    service:
+      type: ClusterIP
+    retention: 6h
+
+  # Scrape Linkerd proxies (every injected pod) + the control plane. This is the
+  # same shape Linkerd Viz uses. If your control plane is not in the `linkerd`
+  # namespace, edit the namespace below and the keep-regex on linkerd-proxy.
+  extraScrapeConfigs: |
+    - job_name: 'coredns'
+      kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: ['kube-system']
+      relabel_configs:
+      - action: keep
+        source_labels: [__meta_kubernetes_pod_label_k8s_app]
+        regex: kube-dns
+      - action: keep
+        source_labels: [__meta_kubernetes_pod_container_port_number]
+        regex: "9153"
+      - action: replace
+        source_labels: [__meta_kubernetes_pod_ip,__meta_kubernetes_pod_container_port_number]
+        regex: (.+);(.+)
+        replacement: $1:$2
+        target_label: __address__
+      - action: replace
+        source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - action: replace
+        source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+    - job_name: 'kubernetes-endpoints'
+      kubernetes_sd_configs:
+        - role: endpoints
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+          action: keep
+          regex: true
+        - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+          action: replace
+          target_label: __address__
+          regex: (.+)(?::\d+);(\d+)
+          replacement: $1:$2
+    - job_name: 'linkerd-controller'
+      kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+          - 'linkerd'
+      relabel_configs:
+      # Control-plane admin ports are named <component>-admin in BEL / recent edge
+      # (dest-admin, policy-admin, ident-admin, spval-admin, injector-admin) — NOT
+      # the older 'admin-http'. Keep those; the proxy's own linkerd-admin port is
+      # already scraped by the linkerd-proxy job, so drop the proxy container here.
+      - source_labels: [__meta_kubernetes_pod_container_port_name]
+        action: keep
+        regex: .*-admin
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        action: drop
+        regex: linkerd-proxy
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        action: replace
+        target_label: component
+      # linkerd.io/control-plane-ns -> control_plane_ns (the dashboard's $namespace)
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_linkerd_io_(.+)
+    - job_name: 'linkerd-proxy'
+      kubernetes_sd_configs:
+      - role: pod
+      relabel_configs:
+      - source_labels:
+        - __meta_kubernetes_pod_container_name
+        - __meta_kubernetes_pod_container_port_name
+        - __meta_kubernetes_pod_label_linkerd_io_control_plane_ns
+        action: keep
+        regex: ^linkerd-proxy;linkerd-admin;linkerd$
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: pod
+      - source_labels: [__meta_kubernetes_pod_label_linkerd_io_proxy_job]
+        action: replace
+        target_label: k8s_job
+      - action: labeldrop
+        regex: __meta_kubernetes_pod_label_linkerd_io_proxy_job
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_linkerd_io_proxy_(.+)
+      - action: labeldrop
+        regex: __meta_kubernetes_pod_label_linkerd_io_proxy_(.+)
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_linkerd_io_(.+)
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+        replacement: __tmp_pod_label_$1
+      - action: labelmap
+        regex: __tmp_pod_label_linkerd_io_(.+)
+        replacement:  __tmp_pod_label_$1
+      - action: labeldrop
+        regex: __tmp_pod_label_linkerd_io_(.+)
+      - action: labelmap
+        regex: __tmp_pod_label_(.+)
+
+
+# ---------------------------------------------------------------------------
+# Grafana subchart (grafana/grafana)
+# Toggle with grafana.enabled. The Prometheus datasource is provisioned by the
+# parent chart (templates/grafana-datasource.yaml) via the sidecar.
+# ---------------------------------------------------------------------------
+grafana:
+  enabled: true
+  adminUser: admin
+  adminPassword: admin
+  persistence:
+    enabled: false
+  # Allow raw HTML in Text panels so the Todea data-plane dashboard can embed the
+  # logo (a data: URI <img>). Safe here — we author every dashboard ourselves.
+  grafana.ini:
+    panels:
+      disable_sanitize_html: true
+  service:
+    type: ClusterIP
+  sidecar:
+    datasources:
+      enabled: true
+      label: grafana_datasource
+    dashboards:
+      enabled: true
+      label: grafana_dashboard

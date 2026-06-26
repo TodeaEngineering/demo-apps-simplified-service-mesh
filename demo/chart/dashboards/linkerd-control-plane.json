@@ -1,0 +1,2138 @@
+{
+  "__elements": {},
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard",
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        }
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": false,
+      "tags": [
+        "buoyant cloud"
+      ],
+      "targetBlank": false,
+      "title": "Dashboards",
+      "tooltip": "",
+      "type": "dashboards",
+      "url": ""
+    }
+  ],
+  "panels": [
+    {
+      "id": 100,
+      "type": "row",
+      "title": "Control Plane Health",
+      "description": "Top-level health signals for the Linkerd control plane. Use this row as your first stop: if any stat here is red or abnormal, drill into the rows below. All four stats should be green and stable in a healthy cluster.",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": 105,
+      "type": "row",
+      "title": "Mesh: Connected Proxies & Active Streams",
+      "description": "Top-level connectivity stats for the Linkerd mesh: how many proxy sidecars are reachable by Prometheus (total mesh size), how many are currently connected to the destination component via long-lived gRPC streams (Get = endpoint watch streams, GetProfile = service profile watch streams), and how many policy watch streams are open. These numbers should be stable and proportional to the number of meshed pods. A sudden drop means proxies disconnected from the control plane and are now operating on stale routing data. A count well below the expected number of meshed pods indicates proxies cannot reach the destination or policy gRPC endpoints.",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      }
+    },
+    {
+      "id": 101,
+      "type": "stat",
+      "title": "Total Meshed Proxies",
+      "description": "Count of Linkerd proxy sidecar instances currently reachable and scraped by Prometheus, across all namespaces connected to this control plane. Each running meshed pod contributes one proxy. This is the total size of your mesh. A value below the expected number of meshed pods means some proxies are unreachable (pod not running, node down, or Prometheus cannot scrape the linkerd-admin port). Use 'count(up{job=\"linkerd-proxy\"}) by (namespace)' to identify which namespaces have missing proxies.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(up{job=\"linkerd-proxy\", control_plane_ns=~\"$control_ns\"})",
+          "legendFormat": "proxies",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "graphMode": "area"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 2
+      }
+    },
+    {
+      "id": 102,
+      "type": "stat",
+      "title": "Active Destination Streams (Endpoint Watch)",
+      "description": "Number of currently open server-streaming gRPC connections for the destination Get method \u2014 this is the endpoint discovery stream that each proxy holds to receive real-time endpoint updates for services it routes to. Calculated as grpc_server_started_total minus grpc_server_handled_total for Get. In a healthy cluster this should approximate the number of unique (source pod, destination service) pairs that have active connections. A sudden drop to zero means all proxies lost their endpoint watch streams \u2014 routes will go stale until streams are re-established.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(grpc_server_started_total{job=\"linkerd-controller\", grpc_service=\"io.linkerd.proxy.destination.Destination\", grpc_method=\"Get\"}) - sum(grpc_server_handled_total{job=\"linkerd-controller\", grpc_service=\"io.linkerd.proxy.destination.Destination\", grpc_method=\"Get\"})",
+          "legendFormat": "active",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "graphMode": "area"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 2
+      }
+    },
+    {
+      "id": 103,
+      "type": "stat",
+      "title": "Active Destination Streams (Profile Watch)",
+      "description": "Number of currently open server-streaming gRPC connections for the destination GetProfile method \u2014 this stream delivers ServiceProfile updates to each proxy, enabling per-route metrics, retries, and timeouts. Each proxy holds one GetProfile stream per service it watches. Calculated as grpc_server_started_total minus grpc_server_handled_total for GetProfile. More streams than Get streams is normal \u2014 proxies watch profiles for services they haven't necessarily connected to yet. A drop means ServiceProfile data is not being pushed to proxies and per-route policies will not take effect.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(grpc_server_started_total{job=\"linkerd-controller\", grpc_service=\"io.linkerd.proxy.destination.Destination\", grpc_method=\"GetProfile\"}) - sum(grpc_server_handled_total{job=\"linkerd-controller\", grpc_service=\"io.linkerd.proxy.destination.Destination\", grpc_method=\"GetProfile\"})",
+          "legendFormat": "active",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "graphMode": "area"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 2
+      }
+    },
+    {
+      "id": 104,
+      "type": "stat",
+      "title": "Active Policy Streams (Watch + WatchPort)",
+      "description": "Total number of currently open server-streaming gRPC connections for the policy component's Watch (outbound) and WatchPort (inbound) methods. Each proxy holds one Watch stream per outbound route group and one WatchPort stream per inbound port it is listening on. These streams push Server and AuthorizationPolicy updates to proxies in real-time. Calculated as the sum of (started - handled) for both Watch and WatchPort methods. A sustained high count is expected \u2014 it scales with the number of meshed pods times their inbound/outbound service fan-out.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(grpc_server_started_total{job=\"linkerd-controller\", component=\"policy\"}) - sum(grpc_server_handled_total{job=\"linkerd-controller\", component=\"policy\"})",
+          "legendFormat": "active",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "graphMode": "area"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 2
+      }
+    },
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Control Plane Up",
+      "description": "Number of Linkerd control-plane targets that Prometheus can successfully scrape (up=1). Each component \u2014 destination, identity, proxy-injector, etc. \u2014 contributes one. A value below the expected component count means one or more pods are down or unreachable by Prometheus. Investigate with: kubectl get pods -n <control_ns>.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(up{control_plane_ns=~\"$control_ns\", job=~\"linkerd-.*\", pod=~\"$pod\"})",
+          "legendFormat": "up",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 6
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Control Plane Restarts (24h)",
+      "description": "Total container restarts across all pods in the control-plane namespace over the past 24 hours, using increase() on kube_pod_container_status_restarts_total. Even if all components are currently Running, non-zero restarts deserve investigation \u2014 they indicate OOMKills, crash-loops, or failed liveness probes. Correlate with kubectl describe pod and container logs to find the cause.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=~\"$control_ns\"}[24h]))",
+          "legendFormat": "restarts",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 6
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Oldest Uptime (hrs)",
+      "description": "Maximum time (hours) any control-plane pod has been continuously running, computed as max_over_time(time() - process_start_time_seconds). A large value means the control plane is stable. A sudden drop means the longest-running pod was recently restarted \u2014 compare with the Restarts panel to tell apart intentional rollouts from unexpected crashes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max_over_time((time() - process_start_time_seconds{control_plane_ns=~\"$control_ns\", pod=~\"$pod\"})[5m:]) / 3600",
+          "legendFormat": "hours",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 6
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Identity Cert Expiry (days)",
+      "description": "Minimum days until any Linkerd identity certificate expires across all control-plane components. Linkerd auto-rotates proxy leaf certificates, but if the issuer (intermediate CA) or trust anchor (root CA) expires, mTLS breaks cluster-wide with no obvious application-level error. Alert when this drops below 30 days. Rotation requires linkerd upgrade or manual cert rotation with step or cert-manager.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "min((control_identity_cert_expiration_timestamp_seconds - time()) / 86400)",
+          "legendFormat": "days",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 6
+      }
+    },
+    {
+      "id": 200,
+      "type": "row",
+      "title": "Control Plane Traffic",
+      "description": "Internal request traffic from proxies to the Linkerd destination and proxy-injector components, measured by control_request_total and control_response_latency_ms. Every proxy in the mesh generates control-plane requests to fetch endpoint discovery updates and policy. High latency or a sudden rate drop here means proxies are having trouble reaching the control plane, which will stale their routing tables and degrade traffic management.",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Control Request Rate",
+      "description": "Rate of requests received per second by Linkerd control-plane servers (destination, proxy-injector), labeled by server_id. Each time a proxy connects to fetch endpoint or policy updates it generates requests here. A spike may indicate many proxies reconnecting simultaneously (e.g., after a rolling restart). A sustained drop to zero means proxies can no longer reach the control plane and are operating on stale state.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(control_request_total{control_plane_ns=~\"$control_ns\", pod=~\"$pod\"}[$__rate_interval])) by (server_id)",
+          "legendFormat": "{{server_id}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 11
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Control Response Latency (p50 / p95 / p99)",
+      "description": "p50, p95, and p99 response latency of the Linkerd control-plane servers in milliseconds, derived from the control_response_latency_ms histogram. High p99 latency (above 100 ms) can slow proxy endpoint resolution, increasing connection setup time for your services. Spikes typically correlate with high destination pod CPU, etcd pressure, or a burst of proxy reconnections after a rollout.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      },
+      "targets": [
+        {
+          "refId": "P50",
+          "expr": "histogram_quantile(0.5, sum(rate(control_response_latency_ms_bucket{control_plane_ns=~\"$control_ns\", pod=~\"$pod\"}[$__rate_interval])) by (le))",
+          "legendFormat": "p50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "P95",
+          "expr": "histogram_quantile(0.95, sum(rate(control_response_latency_ms_bucket{control_plane_ns=~\"$control_ns\", pod=~\"$pod\"}[$__rate_interval])) by (le))",
+          "legendFormat": "p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "P99",
+          "expr": "histogram_quantile(0.99, sum(rate(control_response_latency_ms_bucket{control_plane_ns=~\"$control_ns\", pod=~\"$pod\"}[$__rate_interval])) by (le))",
+          "legendFormat": "p99",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 11
+      }
+    },
+    {
+      "id": 300,
+      "type": "row",
+      "title": "Proxy Injector & Destination Cache",
+      "description": "Admission webhook metrics for the proxy-injector component and internal cache/subscriber counts for the destination component. The proxy-injector is a Kubernetes MutatingAdmissionWebhook that automatically injects the Linkerd proxy sidecar into pods at creation time. The destination component maintains in-memory caches of Kubernetes resources to serve endpoint discovery to proxies without hitting the API server on every request.",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Proxy Injector: Admission Rate (Injected vs. Skipped)",
+      "description": "Rate of proxy injection admission webhook requests and responses per namespace, split by whether injection was applied or skipped. Every pod creation in a meshed namespace triggers an admission request to the proxy-injector. A healthy cluster shows a steady stream of responses with skip=false (injected). Responses with skip=true mean the pod was admitted but injection was skipped \u2014 common for pods in non-meshed namespaces, pods with the linkerd.io/inject=disabled annotation, or Linkerd system pods that manage their own proxy. A drop in both requests and responses to zero means the admission webhook is not being called \u2014 check that the MutatingWebhookConfiguration is registered and the proxy-injector pod is healthy. A high skip rate in namespaces you expect to be meshed indicates an annotation or namespace label misconfiguration.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "requests",
+          "expr": "sum(rate(proxy_inject_admission_requests_total{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (namespace)",
+          "legendFormat": "requests {{namespace}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "injected",
+          "expr": "sum(rate(proxy_inject_admission_responses_total{job=\"linkerd-controller\", skip=\"false\", pod=~\"$pod\"}[$__rate_interval])) by (namespace)",
+          "legendFormat": "injected {{namespace}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "skipped",
+          "expr": "sum(rate(proxy_inject_admission_responses_total{job=\"linkerd-controller\", skip=\"true\", pod=~\"$pod\"}[$__rate_interval])) by (namespace, skip_reason)",
+          "legendFormat": "skipped {{namespace}} ({{skip_reason}})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 19
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Destination: Cache & Subscriber Counts",
+      "description": "In-memory object counts maintained by the destination component's caches and the number of active subscribers (proxies) watching each resource type. The destination component caches Kubernetes endpoints, services, service profiles, and server policies to serve proxy endpoint-discovery (xDS) responses without hitting the API server per-request. Cache sizes scale with the number of services and pods in the cluster \u2014 a large cluster will have thousands of entries. Subscriber counts reflect how many proxy streams are actively watching each resource type. A subscriber count that drops to zero while pods are running means proxies have lost their watch connections to the destination \u2014 investigate network issues between the proxy and destination pod, or destination pod restarts.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "ep_cache",
+          "expr": "endpoints_cache_size{job=\"linkerd-controller\", pod=~\"$pod\"}",
+          "legendFormat": "endpoint cache",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "ep_sub",
+          "expr": "endpoints_subscribers{job=\"linkerd-controller\", pod=~\"$pod\"}",
+          "legendFormat": "endpoint subscribers",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "svc_cache",
+          "expr": "service_cache_size{job=\"linkerd-controller\", pod=~\"$pod\"}",
+          "legendFormat": "service cache",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "svc_sub",
+          "expr": "service_subscribers{job=\"linkerd-controller\", pod=~\"$pod\"}",
+          "legendFormat": "service subscribers",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "profile_sub",
+          "expr": "profile_subscribers{job=\"linkerd-controller\", pod=~\"$pod\"}",
+          "legendFormat": "profile subscribers",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "server_cache",
+          "expr": "server_cache_size{job=\"linkerd-controller\", pod=~\"$pod\"}",
+          "legendFormat": "server cache",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 19
+      }
+    },
+    {
+      "id": 400,
+      "type": "row",
+      "title": "HTTP Client (Controller \u2192 API Server)",
+      "description": "HTTP client metrics for outbound calls made by each Linkerd controller component to the Kubernetes API server. Every controller component (destination, identity, proxy-injector, policy, license) maintains persistent watch connections to the Kubernetes API server to receive resource change events. The metric label 'client' identifies which Kubernetes client is making the call (k8s for the primary client, l5dCrd for the Linkerd CRD client). Elevated error rates or high latency here cascade directly into control-plane reliability \u2014 a slow or unavailable API server affects endpoint discovery, policy enforcement, and certificate issuance simultaneously.",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "HTTP Client: Request Rate",
+      "description": "Rate of outbound HTTP requests made by the linkerd-controller to downstream services (primarily the Kubernetes API server), labeled by client, method, and response code. Sustained 4xx responses indicate RBAC misconfiguration. 5xx responses indicate API server overload. 429 Too Many Requests means the controller is being rate-limited \u2014 this slows down all reconciliation and endpoint updates.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(http_client_requests_total{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (component, client, method, code)",
+          "legendFormat": "{{component}} {{client}} {{method}} {{code}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 27
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "HTTP Client: Latency (p50 / p95 / p99)",
+      "description": "p50, p95, and p99 latency of outbound HTTP calls from the linkerd-controller to downstream services, grouped by client. High latency to the Kubernetes API server directly delays policy propagation and webhook responses. If p99 exceeds 500 ms, investigate API server load, watch for client-side rate limiting, or check for network congestion between the controller pod and the API server endpoint.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "refId": "P50",
+          "expr": "histogram_quantile(0.5, sum(rate(http_client_request_latency_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component, client))",
+          "legendFormat": "p50 {{component}} {{client}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "P95",
+          "expr": "histogram_quantile(0.95, sum(rate(http_client_request_latency_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component, client))",
+          "legendFormat": "p95 {{component}} {{client}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "P99",
+          "expr": "histogram_quantile(0.99, sum(rate(http_client_request_latency_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component, client))",
+          "legendFormat": "p99 {{component}} {{client}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 27
+      }
+    },
+    {
+      "id": 500,
+      "type": "row",
+      "title": "gRPC Server (Controller)",
+      "description": "gRPC server metrics for Linkerd controller components that serve gRPC APIs to proxies. The destination component maintains long-lived server-streaming connections to every proxy (Get and GetProfile methods), pushing endpoint and policy updates in real-time. The identity component serves the CertifyCSR RPC for proxy leaf certificate issuance. These panels show per-component gRPC server throughput, message flow, and completion codes \u2014 essential for verifying that proxies can reach the control plane's gRPC endpoints.",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "gRPC Server: Messages Sent / Received",
+      "description": "Rate of gRPC messages flowing through the controller's streaming RPCs (sent and received), per component. The destination component continuously streams endpoint updates to every connected proxy \u2014 a higher sent rate is expected in clusters with frequent pod churn (rolling deployments, autoscaling). A near-zero sent rate while many proxies are connected means the destination component has stopped pushing updates, which will stale proxy routing tables.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "sent",
+          "expr": "sum(irate(grpc_server_msg_sent_total{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (component, grpc_method)",
+          "legendFormat": "sent {{component}} {{grpc_method}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "recv",
+          "expr": "sum(irate(grpc_server_msg_received_total{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (component, grpc_method)",
+          "legendFormat": "recv {{component}} {{grpc_method}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 35
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "gRPC Server: Handled RPCs by Method / Code",
+      "description": "Rate of completed gRPC RPCs on the controller server, labeled by method and gRPC status code. OK is the expected code for all methods. Unavailable usually means the server is temporarily overloaded or a connection dropped before completion. Internal indicates an unexpected server-side panic or bug \u2014 check controller logs immediately. Unauthenticated or PermissionDenied suggests mTLS or RBAC misconfiguration between proxies and the controller.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(grpc_server_handled_total{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (component, grpc_method, grpc_code)",
+          "legendFormat": "{{component}} {{grpc_method}} {{grpc_code}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 35
+      }
+    },
+    {
+      "id": 600,
+      "type": "row",
+      "title": "Identity & Certificates",
+      "description": "Metrics from the Linkerd identity component tracking the lifecycle of workload identity certificates. Every proxy receives a short-lived leaf certificate signed by the identity issuer, which it rotates automatically before expiry (default 24h TTL, renewed at 70% of lifetime). These panels verify that rotation is happening at the expected rate and that no certificate is silently failing to renew \u2014 a cert that stops renewing will eventually cause mTLS to fail for that workload.",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 42
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Identity Cert Refreshes",
+      "description": "Rate at which the Linkerd identity component successfully issues and renews leaf certificates for proxy workloads, per control-plane component. A healthy cluster shows a steady low rate proportional to the number of meshed pods and their cert lifetime. A drop to zero means the identity service has stopped issuing certs \u2014 connected proxies will lose valid mTLS within hours, causing all authenticated traffic to fail.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(control_identity_cert_refreshes_total{control_plane_ns=~\"$control_ns\", pod=~\"$pod\"}[$__rate_interval])) by (component)",
+          "legendFormat": "{{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 43
+      }
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Identity Cert Expiration Timestamps",
+      "description": "Absolute Unix timestamp (seconds) at which each control-plane component's identity certificate expires. Since Linkerd auto-renews certs well before expiry, this value should continuously advance as new certs are issued \u2014 you should see a rising step function. A flat line for any component means that component's cert has stopped renewing. If the flat line's value approaches the current time (now()), that component's mTLS will break at expiry. Cross-reference with the Identity Cert Expiry stat panel at the top.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "control_identity_cert_expiration_timestamp_seconds{control_plane_ns=~\"$control_ns\", pod=~\"$pod\"}",
+          "legendFormat": "{{pod}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 43
+      }
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "Identity Issuer Cert TTL (days)",
+      "description": "Time-to-live in days of the identity component's issuer (intermediate CA) certificate, derived from issuer_cert_ttl_seconds. The issuer cert signs all proxy leaf certificates; if it expires, the identity component cannot issue new proxy certs and mTLS will fail across the entire mesh as existing proxy certs expire. Linkerd does not auto-rotate the issuer cert \u2014 it must be rotated manually or via cert-manager. Alert at 30 days and act before 14 days. A value of 0 or negative means the issuer cert has already expired.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 14
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "green",
+                "value": 60
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "issuer_cert_ttl_seconds{job=\"linkerd-controller\", pod=~\"$pod\"} / 86400",
+          "legendFormat": "days",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      }
+    },
+    {
+      "id": 650,
+      "type": "row",
+      "title": "Destination: Endpoint Discovery Deep Dive",
+      "description": "Detailed metrics for the Linkerd destination component, which is the xDS-like endpoint discovery server for the mesh. Every proxy holds long-lived gRPC watch streams to destination to receive real-time updates about service endpoints and profiles. The destination component caches all Kubernetes endpoint, service, and policy resources locally, and distributes updates to proxies via server-streaming RPCs. Issues in this row directly affect how proxies route traffic \u2014 stale endpoints cause connection failures, slow profile updates disable per-route policies.",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 54
+      }
+    },
+    {
+      "id": 110,
+      "type": "timeseries",
+      "title": "Destination: Active gRPC Streams Over Time",
+      "description": "Time series of concurrently open gRPC streaming connections to the destination component, split by method (Get = endpoint watch, GetProfile = profile watch). Calculated as grpc_server_started_total minus grpc_server_handled_total \u2014 the difference represents streams that have started but not yet completed (i.e., currently active). Get streams scale with the number of distinct (pod, service endpoint) pairs actively routing. GetProfile streams scale with the number of (pod, service) pairs with watched profiles. Drops during rolling deployments are normal and should recover within seconds as proxies reconnect. A sustained downward trend without a deployment indicates proxies are failing to maintain their watch connections.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "Get",
+          "expr": "sum(grpc_server_started_total{job=\"linkerd-controller\", grpc_service=\"io.linkerd.proxy.destination.Destination\", grpc_method=\"Get\", pod=~\"$pod\"}) - sum(grpc_server_handled_total{job=\"linkerd-controller\", grpc_service=\"io.linkerd.proxy.destination.Destination\", grpc_method=\"Get\", pod=~\"$pod\"})",
+          "legendFormat": "Get (endpoint watch)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "GetProfile",
+          "expr": "sum(grpc_server_started_total{job=\"linkerd-controller\", grpc_service=\"io.linkerd.proxy.destination.Destination\", grpc_method=\"GetProfile\", pod=~\"$pod\"}) - sum(grpc_server_handled_total{job=\"linkerd-controller\", grpc_service=\"io.linkerd.proxy.destination.Destination\", grpc_method=\"GetProfile\", pod=~\"$pod\"})",
+          "legendFormat": "GetProfile (profile watch)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 55
+      }
+    },
+    {
+      "id": 111,
+      "type": "timeseries",
+      "title": "Destination: Endpoint & Profile Update Rate",
+      "description": "Rate of endpoint and profile change events processed and forwarded by the destination component to connected proxies. endpoints_updates counts the rate of Kubernetes endpoint change events (pod adds, removes, address changes) that the destination received and processed. profile_updates counts the rate of ServiceProfile resource changes forwarded to proxy subscribers. High update rates correlate with active deployments, autoscaler activity, or pod churn. Sustained high rates during quiet periods may indicate a flapping endpoint (pod repeatedly becoming ready/unready) \u2014 find it with 'kube_pod_status_ready' and check for OOMKills or liveness probe failures.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "ep",
+          "expr": "rate(endpoints_updates{job=\"linkerd-controller\", component=\"destination\", pod=~\"$pod\"}[$__rate_interval])",
+          "legendFormat": "endpoint updates/s",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "profile",
+          "expr": "rate(profile_updates{job=\"linkerd-controller\", component=\"destination\", pod=~\"$pod\"}[$__rate_interval])",
+          "legendFormat": "profile updates/s",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 55
+      }
+    },
+    {
+      "id": 112,
+      "type": "timeseries",
+      "title": "Destination: Update Queue Overflows",
+      "description": "Count of endpoint and profile update events that were dropped because the internal queue to subscriber proxies was full. A non-zero value here means the destination component is producing updates faster than it can deliver them to connected proxies \u2014 some proxies will receive a snapshot resync instead of incremental updates, causing a brief increase in bandwidth between proxies and the destination. Overflows are most likely during large rolling deployments that churn many endpoints simultaneously. If overflows are sustained during normal operation, consider increasing destination pod resources or investigating whether a specific service has an unusually high endpoint churn rate.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "ep",
+          "expr": "rate(endpoint_updates_queue_overflow{job=\"linkerd-controller\", component=\"destination\", pod=~\"$pod\"}[$__rate_interval])",
+          "legendFormat": "endpoint queue overflow/s",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "profile",
+          "expr": "rate(profile_updates_queue_overflow{job=\"linkerd-controller\", component=\"destination\", pod=~\"$pod\"}[$__rate_interval])",
+          "legendFormat": "profile queue overflow/s",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 62
+      }
+    },
+    {
+      "id": 113,
+      "type": "timeseries",
+      "title": "Goroutines by Component",
+      "description": "Current goroutine count for each Linkerd controller component. Goroutines are used for concurrent watch stream handling, reconciliation workers, gRPC server streams, and background tasks. Expected counts vary by component: destination typically runs 100-300 goroutines (scales with open streams), identity stays low (20-50), policy scales similarly to destination, and proxy-injector stays low unless under heavy admission load. A goroutine count that grows unbounded over hours \u2014 not just a spike during bursts \u2014 indicates a goroutine leak in a long-running loop. Monitor this panel alongside CPU: if goroutines grow but CPU stays flat, the goroutines are mostly idle and may be stuck waiting on a blocked channel.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "go_goroutines{job=\"linkerd-controller\", pod=~\"$pod\"}",
+          "legendFormat": "{{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 62
+      }
+    },
+    {
+      "id": 700,
+      "type": "row",
+      "title": "Informer Lag (Kubernetes Watch Latency)",
+      "description": "Histogram-derived latency between when a Kubernetes resource was modified and when the Linkerd controller component's local informer cache reflected that change. Informers are the watch-based caches each controller maintains to avoid hitting the API server per-request. High informer lag means the controller is behind on processing Kubernetes events \u2014 new pods, services, and policy resources will take longer to be visible to proxies. Expected p99 lag in a healthy cluster is under 100 ms. Sustained high lag (above 1 second) usually indicates API server pressure, network issues between the controller and API server, or excessive event volume overwhelming the controller's processing goroutines.",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 69
+      }
+    },
+    {
+      "id": 120,
+      "type": "timeseries",
+      "title": "EndpointSlice Informer Lag P99 (by Component)",
+      "description": "99th-percentile latency for the EndpointSlice informer cache to reflect changes \u2014 i.e., how long after a pod's endpoint is added/removed/changed does the controller's local cache know about it. Endpoint changes directly affect which pod IPs destination will stream to connected proxies. A high p99 here means new pods become visible to proxies late, and removed pods stay in proxy routing tables for longer than expected, causing connection errors. Each component (destination, identity, sp-validator, proxy-injector) maintains its own EndpointSlice informer. The destination component's lag is most critical since it directly drives endpoint discovery.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum(rate(endpointslices_informer_lag_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component))",
+          "legendFormat": "p99 {{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.50, sum(rate(endpointslices_informer_lag_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component))",
+          "legendFormat": "p50 {{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 70
+      }
+    },
+    {
+      "id": 121,
+      "type": "timeseries",
+      "title": "Pod Informer Lag P99 (by Component)",
+      "description": "99th-percentile latency for the Pod informer cache to reflect changes. Controllers watch pod events to track which pods are running, their IP addresses, and their readiness state. High pod informer lag affects proxy injection (the proxy-injector needs current pod state to process admission requests) and workload identity (the identity component tracks pod identity for certificate issuance). Pod informer lag typically exceeds EndpointSlice lag because pod objects are larger and change more frequently. Alert if p99 exceeds 5 seconds \u2014 at that point proxy-injector admission webhooks may time out waiting for pod state.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum(rate(pods_informer_lag_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component))",
+          "legendFormat": "p99 {{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.50, sum(rate(pods_informer_lag_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component))",
+          "legendFormat": "p50 {{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 70
+      }
+    },
+    {
+      "id": 122,
+      "type": "timeseries",
+      "title": "Service & ServiceProfile Informer Lag P99",
+      "description": "99th-percentile latency for Service and ServiceProfile informer caches. Service informer lag affects how quickly new services become discoverable by the destination component \u2014 a new ClusterIP service will not be available for proxy routing until the service informer reflects it. ServiceProfile informer lag affects how quickly per-route policies (retries, timeouts, traffic splitting) take effect after you create or update a ServiceProfile resource. In most clusters these lags are near-zero. Elevated values indicate API server pressure or a very high rate of service/profile creation events.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "refId": "svc",
+          "expr": "histogram_quantile(0.99, sum(rate(services_informer_lag_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component))",
+          "legendFormat": "p99 service {{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "profile",
+          "expr": "histogram_quantile(0.99, sum(rate(serviceprofiles_informer_lag_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component))",
+          "legendFormat": "p99 profile {{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 77
+      }
+    },
+    {
+      "id": 123,
+      "type": "timeseries",
+      "title": "Server Informer Lag P99",
+      "description": "99th-percentile latency for the Server CRD informer (Linkerd Server resources that define inbound policy). Server resources specify which clients are allowed to connect to a workload's ports. High Server informer lag means policy changes take longer to propagate to the policy component, which then delays delivery to connected proxies via WatchPort streams. If you have just applied a new Server resource and are not seeing the expected authorization behavior, check this panel \u2014 if lag is high, the policy component may simply not have processed the change yet.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum(rate(servers_informer_lag_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component))",
+          "legendFormat": "p99 {{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.50, sum(rate(servers_informer_lag_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component))",
+          "legendFormat": "p50 {{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 77
+      }
+    },
+    {
+      "id": 800,
+      "type": "row",
+      "title": "Identity: Certificate Issuance Deep Dive",
+      "description": "Detailed metrics for the Linkerd identity component, which acts as the mesh certificate authority (CA). Every proxy receives a short-lived leaf certificate (default 24-hour TTL, renewed at ~70% lifetime) signed by the identity issuer. The identity component handles all certificate signing requests (CSRs) from proxies via the Certify gRPC RPC. Without valid certificates, proxies cannot establish mTLS connections \u2014 if identity is slow or unavailable, new pod startups will stall waiting for their initial certificate, and existing certs will expire without renewal causing mTLS failures.",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 84
+      }
+    },
+    {
+      "id": 130,
+      "type": "timeseries",
+      "title": "Identity: Certify RPC Rate & Active Requests",
+      "description": "Rate of Certify gRPC RPC calls per second (new certificate issuances and renewals) and the count of currently in-flight Certify RPCs. The Certify RPC is a unary call \u2014 each proxy sends its CSR and receives a signed certificate in return. The steady-state rate is driven by certificate renewal: with a 24-hour cert TTL renewed at 70% lifetime, each proxy will call Certify roughly every 16-17 hours. A burst in the Certify rate correlates with many pods starting simultaneously (e.g., a large rolling deployment). Active RPCs above 10-20 simultaneously during a burst is normal; sustained high active RPCs during quiet periods means the identity component is slow to respond.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "rate",
+          "expr": "sum(rate(grpc_server_handled_total{job=\"linkerd-controller\", component=\"identity\", grpc_method=\"Certify\", pod=~\"$pod\"}[$__rate_interval]))",
+          "legendFormat": "certify rate/s",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "active",
+          "expr": "sum(grpc_server_started_total{job=\"linkerd-controller\", component=\"identity\", grpc_method=\"Certify\", pod=~\"$pod\"}) - sum(grpc_server_handled_total{job=\"linkerd-controller\", component=\"identity\", grpc_method=\"Certify\", pod=~\"$pod\"})",
+          "legendFormat": "active certify requests",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 85
+      }
+    },
+    {
+      "id": 131,
+      "type": "timeseries",
+      "title": "Identity: Certify RPC Latency (p50 / p95 / p99)",
+      "description": "Response latency of the Certify gRPC RPC at p50, p95, and p99. The Certify RPC involves: (1) validating the proxy's service account token, (2) signing the CSR using the issuer private key, and (3) returning the signed certificate chain. In a healthy cluster with a software issuer, p99 should be under 50 ms. If cert-manager is used as an external issuer, latency will be higher (100-500 ms) as it involves API server calls. Elevated p99 slows proxy startup for new pods and delays cert renewal \u2014 proxies will retry, but during the retry window they operate with an expired or near-expired cert, which may cause mTLS failures if the cert has actually expired.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "refId": "p50",
+          "expr": "histogram_quantile(0.50, sum(rate(grpc_server_handling_seconds_bucket{job=\"linkerd-controller\", component=\"identity\", grpc_method=\"Certify\", pod=~\"$pod\"}[$__rate_interval])) by (le))",
+          "legendFormat": "p50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "p95",
+          "expr": "histogram_quantile(0.95, sum(rate(grpc_server_handling_seconds_bucket{job=\"linkerd-controller\", component=\"identity\", grpc_method=\"Certify\", pod=~\"$pod\"}[$__rate_interval])) by (le))",
+          "legendFormat": "p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "p99",
+          "expr": "histogram_quantile(0.99, sum(rate(grpc_server_handling_seconds_bucket{job=\"linkerd-controller\", component=\"identity\", grpc_method=\"Certify\", pod=~\"$pod\"}[$__rate_interval])) by (le))",
+          "legendFormat": "p99",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 85
+      }
+    },
+    {
+      "id": 900,
+      "type": "row",
+      "title": "Policy: Active Streams & Authorization",
+      "description": "Metrics for the Linkerd policy component, which distributes inbound (Server, AuthorizationPolicy) and outbound (HTTPRoute, TLSRoute) policy to proxies via long-lived gRPC watch streams. WatchPort is the inbound stream \u2014 each proxy holds one per inbound port it listens on, receiving real-time authorization policy updates. Watch is the outbound stream \u2014 each proxy holds one per outbound route group, receiving HTTPRoute/TLSRoute policy updates. Policy failures or disconnections cause proxies to fall back to default policy behavior (allow-all or deny-all, depending on configuration). If you see authorization errors in the data plane that do not match your Server/AuthorizationPolicy configuration, check this row for stream disconnections or gRPC errors.",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 92
+      }
+    },
+    {
+      "id": 140,
+      "type": "timeseries",
+      "title": "Policy: Active Watch Streams Over Time",
+      "description": "Currently open gRPC watch streams from the policy component to proxies, split by method: WatchPort (inbound policy \u2014 one stream per proxy port) and Watch (outbound policy \u2014 one stream per outbound route). Calculated as grpc_server_started_total minus grpc_server_handled_total. Stream counts scale with the number of meshed pods and their inbound/outbound service connectivity. A WatchPort count drop means proxies lost their inbound policy streams and will fall back to the default inbound policy. A Watch count drop means outbound route policy (HTTPRoute, retries, timeouts) is not being pushed \u2014 proxies will route using the last known state until reconnected.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "inbound",
+          "expr": "sum(grpc_server_started_total{job=\"linkerd-controller\", component=\"policy\", grpc_method=\"WatchPort\", pod=~\"$pod\"}) - sum(grpc_server_handled_total{job=\"linkerd-controller\", component=\"policy\", grpc_method=\"WatchPort\", pod=~\"$pod\"})",
+          "legendFormat": "WatchPort (inbound policy)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "outbound",
+          "expr": "sum(grpc_server_started_total{job=\"linkerd-controller\", component=\"policy\", grpc_method=\"Watch\", pod=~\"$pod\"}) - sum(grpc_server_handled_total{job=\"linkerd-controller\", component=\"policy\", grpc_method=\"Watch\", pod=~\"$pod\"})",
+          "legendFormat": "Watch (outbound policy)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 93
+      }
+    },
+    {
+      "id": 141,
+      "type": "timeseries",
+      "title": "Policy: gRPC Handling Latency P99 (by Method)",
+      "description": "99th-percentile gRPC response/stream-close latency for each policy server method. WatchPort and Watch are long-lived streaming RPCs \u2014 their 'latency' represents the full lifetime of the stream from open to close, which is expected to be very long (minutes to hours for healthy proxies). GetPort and Get are unary RPCs that return the current policy snapshot \u2014 their latency should be sub-100 ms. If you see very short p99 values for WatchPort/Watch, it means streams are closing quickly and reconnecting frequently \u2014 investigate for network instability or proxy crashes. A spike in GetPort/Get latency means policy snapshot queries are slow, likely due to the policy component being under CPU or memory pressure.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum(rate(grpc_server_handling_seconds_bucket{job=\"linkerd-controller\", component=\"policy\", pod=~\"$pod\"}[$__rate_interval])) by (le, grpc_method))",
+          "legendFormat": "p99 {{grpc_method}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 93
+      }
+    },
+    {
+      "id": 1300,
+      "type": "row",
+      "title": "Controller Resource Usage",
+      "description": "Go runtime and process-level resource metrics for the linkerd-controller pods. The controller is the central hub for endpoint discovery, policy distribution, and Kubernetes API watching. Resource exhaustion here affects all data-plane proxies simultaneously \u2014 it is a single point of control-plane failure. All panels are scoped to the selected control plane namespace.",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 100
+      }
+    },
+    {
+      "id": 39,
+      "type": "timeseries",
+      "title": "Controller CPU",
+      "description": "CPU cores consumed by linkerd-controller pods. The controller is event-driven and should mostly idle between reconciliation cycles. Sustained CPU above 0.5 cores typically means it is struggling to keep up with watch events \u2014 common in large clusters or during high pod churn. CPU spikes during rolling deployments are normal. If CPU is high during quiet periods, look for a tight reconciliation loop or an expensive API watch handler.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(process_cpu_seconds_total{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (component)",
+          "legendFormat": "{{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 101
+      }
+    },
+    {
+      "id": 40,
+      "type": "timeseries",
+      "title": "Controller Memory (RSS & Heap)",
+      "description": "Resident set size (RSS) and Go heap in-use bytes for linkerd-controller pods. In clusters with many services and endpoints, the controller caches the full endpoint state in memory \u2014 RSS scales with cluster size. If RSS grows beyond the pod memory limit, it will be OOMKilled, disrupting all connected proxies. The gap between RSS and heap reflects Go runtime overhead, goroutine stacks, and memory-mapped files.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      },
+      "targets": [
+        {
+          "refId": "rss",
+          "expr": "sum(process_resident_memory_bytes{job=\"linkerd-controller\", pod=~\"$pod\"}) by (component)",
+          "legendFormat": "rss {{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "heap",
+          "expr": "sum(go_memstats_heap_inuse_bytes{job=\"linkerd-controller\", pod=~\"$pod\"}) by (component)",
+          "legendFormat": "heap {{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 101
+      }
+    },
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "Controller GC Pause (p50 / p95 / p99)",
+      "description": "Go garbage collector stop-the-world pause durations for the linkerd-controller at p50, p95, and p99. During a GC pause the controller is completely halted \u2014 this directly causes latency spikes in any in-flight control-plane responses. Pauses above 10 ms at p99 are problematic for a latency-sensitive control plane. High GC pressure usually means the allocation rate (see Alloc Rate panel) is too high, driven by a burst of Kubernetes watch events being processed.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "refId": "P50",
+          "expr": "go_gc_duration_seconds{job=\"linkerd-controller\", quantile=\"0.5\", pod=~\"$pod\"}",
+          "legendFormat": "p50 {{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "P95",
+          "expr": "go_gc_duration_seconds{job=\"linkerd-controller\", quantile=\"0.95\", pod=~\"$pod\"}",
+          "legendFormat": "p95 {{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "P99",
+          "expr": "go_gc_duration_seconds{job=\"linkerd-controller\", quantile=\"0.99\", pod=~\"$pod\"}",
+          "legendFormat": "p99 {{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 108
+      }
+    },
+    {
+      "id": 42,
+      "type": "timeseries",
+      "title": "Controller Goroutines",
+      "description": "Current goroutine count for each linkerd-controller pod. The controller uses goroutines for concurrent watch stream processing, reconciliation queue workers, and gRPC streams. A healthy controller in a mid-sized cluster typically has hundreds to a few thousand goroutines. A count growing without bound across hours \u2014 not spikes during bursts \u2014 strongly suggests goroutine leaks in a reconciliation loop or watch event handler.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "go_goroutines{job=\"linkerd-controller\", pod=~\"$pod\"}",
+          "legendFormat": "{{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 108
+      }
+    },
+    {
+      "id": 43,
+      "type": "timeseries",
+      "title": "Controller Heap Objects",
+      "description": "Number of live Go heap objects (allocated but not yet garbage-collected) per linkerd-controller pod. A high and stable count is normal; a continuously climbing count that does not fall after GC cycles indicates a memory leak \u2014 objects being retained by global caches or maps. This is most useful when compared alongside the Alloc Rate and GC Pause panels: high alloc rate + high heap object count + frequent GC pauses is the classic pattern of a hot allocation path that is stressing the runtime.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "go_memstats_heap_objects{job=\"linkerd-controller\", pod=~\"$pod\"}",
+          "legendFormat": "{{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 115
+      }
+    },
+    {
+      "id": 44,
+      "type": "timeseries",
+      "title": "Controller Alloc Rate",
+      "description": "Rate of Go heap allocations (bytes/sec) by the linkerd-controller, derived from go_memstats_alloc_bytes_total. This measures gross allocation throughput \u2014 the GC reclaims dead objects, but until it does the heap grows. A healthy controller in a quiet cluster allocates very little. A burst during rolling deployments or a wave of watch events is normal and will subside. A sustained high alloc rate (above 10 MB/s) during normal operation means a code path is allocating excessively \u2014 often string/proto marshalling on a hot watch event loop. High alloc rates drive GC frequency, increasing pause times and CPU overhead.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(go_memstats_alloc_bytes_total{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (component)",
+          "legendFormat": "{{component}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 115
+      }
+    },
+    {
+      "id": 1400,
+      "type": "row",
+      "title": "Enterprise: External Workloads",
+      "description": "Buoyant Enterprise autoregistration controller metrics covering external workload registration outcomes, lifecycle events, and gRPC server health. The autoregistration controller manages ExternalWorkload resources \u2014 representing non-Kubernetes workloads (VMs, bare-metal) that are integrated into the Linkerd mesh. Failures here mean external workloads cannot join the mesh and will not receive mTLS or policy enforcement. NOTE: These panels only show data when the autoregistration controller is deployed (a separate container in the enterprise pod) AND when ExternalWorkloadGroup resources are configured in your cluster. If panels show no data, external workload autoregistration is not active.",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 122
+      }
+    },
+    {
+      "id": 45,
+      "type": "timeseries",
+      "title": "Registration Success / Failure Rate",
+      "description": "Rate of ExternalWorkload registration attempts that succeeded or failed per ExternalWorkloadGroup (name/namespace). A registration attempt occurs when a workload harness calls the autoregistration gRPC endpoint to join the mesh. Successes result in an ExternalWorkload resource being created or updated in Kubernetes. Failures \u2014 measured by autoregistration_controller_workload_registration_failure_total \u2014 mean the workload could not be registered: check whether the ExternalWorkloadGroup CRD exists, that the controller has the required RBAC to create ExternalWorkload resources, and that the workload's identity and address were valid. Persistent failures will leave external workloads outside the mesh with no mTLS or policy applied.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "success",
+          "expr": "sum(rate(autoregistration_controller_workload_registration_success_total[$__rate_interval])) by (workload_group_name, workload_group_namespace)",
+          "legendFormat": "success {{workload_group_namespace}}/{{workload_group_name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "fail",
+          "expr": "sum(rate(autoregistration_controller_workload_registration_failure_total[$__rate_interval])) by (workload_group_name, workload_group_namespace)",
+          "legendFormat": "fail {{workload_group_namespace}}/{{workload_group_name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 123
+      }
+    },
+    {
+      "id": 46,
+      "type": "timeseries",
+      "title": "External Workloads Created / Reconnected",
+      "description": "Rate of ExternalWorkload Kubernetes resources being created (new workload first registered) and reconnected (existing workload re-registering after a disconnect) per ExternalWorkloadGroup. A created event means a brand-new workload joined the mesh; a reconnected event means a previously known workload reconnected \u2014 expected after restarts or network interruptions. A high sustained creation rate without corresponding reconnection is normal during cluster scale-out. A high reconnection rate without creations indicates frequent disconnects \u2014 investigate network stability between external workloads and the Kubernetes API server, or proxy crashes in the workload harness.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "created",
+          "expr": "sum(rate(autoregistration_controller_external_workloads_created_total[$__rate_interval])) by (workload_group_name, workload_group_namespace)",
+          "legendFormat": "created {{workload_group_namespace}}/{{workload_group_name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "reconnected",
+          "expr": "sum(rate(autoregistration_controller_external_workloads_reconnected_total[$__rate_interval])) by (workload_group_name, workload_group_namespace)",
+          "legendFormat": "reconnected {{workload_group_namespace}}/{{workload_group_name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 123
+      }
+    },
+    {
+      "id": 47,
+      "type": "timeseries",
+      "title": "Autoregistration gRPC: Handled RPCs",
+      "description": "Rate of gRPC RPCs completed by the autoregistration controller server, broken down by method (RegisterWorkload, ReportHealth) and gRPC status code. OK is the expected code for all successful calls. InvalidArgument means the workload harness sent a malformed registration request \u2014 check the harness version and configuration. NotFound means the ExternalWorkloadGroup referenced in the registration request does not exist in the cluster. Internal indicates a server-side error \u2014 review controller logs for stack traces. A drop in RPC rate to zero means no workloads are actively registering, which may be normal in a stable cluster but requires investigation if workloads are expected to be joining.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(autoregistration_controller_grpc_server_handled_total[$__rate_interval])) by (grpc_method, grpc_code)",
+          "legendFormat": "{{grpc_method}} {{grpc_code}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 130
+      }
+    },
+    {
+      "id": 48,
+      "type": "timeseries",
+      "title": "Autoregistration gRPC: Handling Latency P95",
+      "description": "95th-percentile gRPC handling duration per method (RegisterWorkload, ReportHealth) for the autoregistration controller server. RegisterWorkload involves creating or updating a Kubernetes ExternalWorkload resource, so its latency depends on Kubernetes API server responsiveness \u2014 p95 should normally be under 500 ms. ReportHealth is a long-lived streaming RPC; its latency represents the time from the first message to stream close, which is expected to be very long (minutes to hours). A spike in RegisterWorkload latency correlates with API server congestion or high controller load and will slow down workloads trying to join the mesh.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum(rate(autoregistration_controller_grpc_server_handling_seconds_bucket[$__rate_interval])) by (le, grpc_method))",
+          "legendFormat": "p95 {{grpc_method}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 130
+      }
+    },
+    {
+      "id": 1500,
+      "type": "row",
+      "title": "Enterprise: Work Queue",
+      "description": "Kubernetes controller work-queue metrics from the enterprise autoregistration controller. The work queue is the backbone of the controller's reconciliation loop: ExternalWorkload events are enqueued here and processed by reconciler goroutines. A healthy queue has near-zero depth, sub-second processing durations, and no drops. Backlogs (rising depth) indicate the reconciler is falling behind \u2014 caused by high event throughput, slow Kubernetes API calls, or insufficient goroutines. Drops mean events were permanently discarded after exceeding the retry limit, which can leave ExternalWorkloads in a stale or inconsistent state.",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 137
+      }
+    },
+    {
+      "id": 49,
+      "type": "timeseries",
+      "title": "WorkQueue Depth",
+      "description": "Current depth of each controller work queue \u2014 the number of items waiting to be processed by the reconciler goroutines. In a healthy, idle controller this should be zero or near-zero. A depth that climbs and does not drain means the controller is falling behind: either the event rate is higher than the reconcilers can handle, or each reconciliation is slow (check Work Duration and API server latency). Sustained depth above 100 for more than a few minutes warrants investigation, as ExternalWorkload state updates will be delayed proportionally.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "workqueue_depth{job=\"linkerd-controller\", pod=~\"$pod\"}",
+          "legendFormat": "{{component}} {{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 138
+      }
+    },
+    {
+      "id": 50,
+      "type": "timeseries",
+      "title": "WorkQueue Add Rate",
+      "description": "Rate at which items are enqueued into each controller work queue (items/sec), derived from workqueue_adds_total. This reflects the Kubernetes event throughput driving reconciliation \u2014 each ExternalWorkload create/update/delete event generates an add. A burst in add rate during deployments or scale events is expected and should subside. If the add rate is consistently high during quiet periods, the controller may be requeuing the same items repeatedly \u2014 a sign of a reconciliation loop that never reaches a stable state. Compare with Retries to confirm.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(workqueue_adds_total{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (component, name)",
+          "legendFormat": "{{component}} {{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 138
+      }
+    },
+    {
+      "id": 51,
+      "type": "timeseries",
+      "title": "WorkQueue Queue Duration (p50 / p95 / p99)",
+      "description": "Time (seconds) that items wait in the work queue before a reconciler goroutine picks them up \u2014 workqueue_queue_duration_seconds at p50, p95, and p99. This is the scheduling latency independent of how long reconciliation actually takes. In a well-tuned controller, queue duration should be sub-millisecond at p99. Rising queue duration means reconciler goroutines are fully occupied and new items are waiting: either increase controller resources, or investigate why each reconciliation is taking so long (see Work Duration). A high queue duration directly translates to delayed responses to ExternalWorkload lifecycle events.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "refId": "P50",
+          "expr": "histogram_quantile(0.5, sum(rate(workqueue_queue_duration_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component, name))",
+          "legendFormat": "p50 {{component}} {{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "P95",
+          "expr": "histogram_quantile(0.95, sum(rate(workqueue_queue_duration_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component, name))",
+          "legendFormat": "p95 {{component}} {{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "P99",
+          "expr": "histogram_quantile(0.99, sum(rate(workqueue_queue_duration_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component, name))",
+          "legendFormat": "p99 {{component}} {{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 145
+      }
+    },
+    {
+      "id": 52,
+      "type": "timeseries",
+      "title": "WorkQueue Work Duration (p50 / p95 / p99)",
+      "description": "Time (seconds) spent by a reconciler goroutine actually processing a single item from the work queue \u2014 workqueue_work_duration_seconds at p50, p95, and p99. This measures the reconciliation cost: reading ExternalWorkload state, calling the Kubernetes API, and writing updates. Healthy reconciliations should complete in tens of milliseconds. A high p99 (above 1 second) means each reconciliation is expensive, typically because the Kubernetes API server is slow or the controller is doing redundant work. High work duration with a high queue depth means the controller is both slow per item and accumulating a backlog \u2014 a compound problem that requires both performance investigation and possibly scaling.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "refId": "P50",
+          "expr": "histogram_quantile(0.5, sum(rate(workqueue_work_duration_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component, name))",
+          "legendFormat": "p50 {{component}} {{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "P95",
+          "expr": "histogram_quantile(0.95, sum(rate(workqueue_work_duration_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component, name))",
+          "legendFormat": "p95 {{component}} {{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "P99",
+          "expr": "histogram_quantile(0.99, sum(rate(workqueue_work_duration_seconds_bucket{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (le, component, name))",
+          "legendFormat": "p99 {{component}} {{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 145
+      }
+    },
+    {
+      "id": 53,
+      "type": "timeseries",
+      "title": "WorkQueue Retries & Drops",
+      "description": "Rate of work queue retries and permanent drops per queue name. Retries occur when a reconciliation fails \u2014 the item is requeued with exponential backoff and tried again. A low retry rate is normal and expected during transient errors (temporary API server unavailability, optimistic locking conflicts). A sustained high retry rate means a reconciliation loop is consistently failing \u2014 check controller logs for recurring error messages. Drops (workqueue_drops_total) are critical: an item is dropped when it exceeds the retry limit and is permanently discarded. A non-zero drop rate means an ExternalWorkload event was permanently lost \u2014 the resource will not converge to its desired state until the next external trigger (e.g., a subsequent update). Investigate and eliminate the root cause of retries before drops accumulate.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "retries",
+          "expr": "sum(rate(workqueue_retries_total{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (component, name)",
+          "legendFormat": "retries {{component}} {{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "drops",
+          "expr": "sum(rate(workqueue_drops_total{job=\"linkerd-controller\", pod=~\"$pod\"}[$__rate_interval])) by (component, name)",
+          "legendFormat": "drops {{component}} {{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 152
+      }
+    },
+    {
+      "id": 54,
+      "type": "timeseries",
+      "title": "WorkQueue Unfinished & Longest Running Processor",
+      "description": "Two complementary metrics for detecting stuck reconciler goroutines. Unfinished Work (workqueue_unfinished_work_seconds) accumulates while items are actively being processed and is subtracted when they complete \u2014 a growing value means goroutines are processing items but never completing them, the strongest signal for a deadlock or a goroutine blocked on a slow external call. Longest Running Processor (workqueue_longest_running_processor_seconds) shows how long the single longest-running reconciler has been running without completion. A value above 60 seconds is a warning; above 5 minutes is almost certainly a stuck goroutine. Restart the controller pod if a goroutine is confirmed stuck, and open a bug report with a goroutine dump from the pprof endpoint.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "refId": "unfinished",
+          "expr": "workqueue_unfinished_work_seconds{job=\"linkerd-controller\", pod=~\"$pod\"}",
+          "legendFormat": "unfinished {{component}} {{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "longest",
+          "expr": "workqueue_longest_running_processor_seconds{job=\"linkerd-controller\", pod=~\"$pod\"}",
+          "legendFormat": "longest {{component}} {{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 152
+      }
+    },
+    {
+      "id": 1600,
+      "type": "row",
+      "title": "Enterprise: License Controller",
+      "description": "gRPC server metrics for the Buoyant Enterprise license controller, which serves the current license to other controller components on demand. The license controller exposes a single License RPC method. If this controller fails or returns errors, dependent components may be unable to validate their license \u2014 potentially triggering enforcement actions. Monitor this row when troubleshooting license-related errors reported by other enterprise components.",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 159
+      }
+    },
+    {
+      "id": 55,
+      "type": "timeseries",
+      "title": "License Controller gRPC: Handled RPCs",
+      "description": "Rate of gRPC RPCs completed by the license controller server, broken down by method and gRPC status code. The primary method is License, called by enterprise components to retrieve the current license. In normal operation you will see a steady low rate of OK responses. An Unavailable or Internal response code means the license controller is failing to serve requests \u2014 other enterprise components will be unable to verify their license. A complete drop to zero RPC rate (while the controller pod is Running) may indicate the controller has crashed into a goroutine deadlock and is no longer processing requests.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(license_controller_grpc_server_handled_total[$__rate_interval])) by (grpc_method, grpc_code)",
+          "legendFormat": "{{grpc_method}} {{grpc_code}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 160
+      }
+    },
+    {
+      "id": 56,
+      "type": "timeseries",
+      "title": "License Controller gRPC: Handling Latency P95",
+      "description": "95th-percentile gRPC request handling duration for the license controller's License RPC method. The License RPC serves an in-memory string \u2014 it should be extremely fast, with p95 latency well under 1 millisecond. Any spike above 10 ms is anomalous and suggests the controller is CPU-starved, blocked on a lock, or the gRPC stack itself is under pressure. If callers are experiencing timeouts when fetching license data, this panel will confirm whether the latency is server-side or network-induced.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum(rate(license_controller_grpc_server_handling_seconds_bucket[$__rate_interval])) by (le, grpc_method))",
+          "legendFormat": "p95 {{grpc_method}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 160
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 34,
+  "tags": [
+    "linkerd",
+    "control-plane",
+    "enterprise"
+  ],
+  "templating": {
+    "list": [
+      {
+        "type": "datasource",
+        "name": "datasource",
+        "label": "Prometheus",
+        "query": "prometheus",
+        "refresh": 1
+      },
+      {
+        "type": "query",
+        "name": "control_ns",
+        "label": "Control plane namespace",
+        "description": "The namespace where the Linkerd control plane is installed.",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(process_start_time_seconds{control_plane_ns!=\"\"}, control_plane_ns)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "current": {
+          "text": "linkerd",
+          "value": "linkerd"
+        }
+      },
+      {
+        "type": "query",
+        "name": "pod",
+        "label": "Pod",
+        "description": "Filter all controller panels to a specific pod. Values are populated from the linkerd-controller scrape job. Multiple pods may share the same pod (e.g., destination, policy, and sp-validator all run in linkerd-destination). Select 'All' to see aggregated data across the entire control plane.",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(up{job=\"linkerd-controller\", namespace=~\"$control_ns\"}, pod)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Linkerd Control Plane",
+  "uid": "linkerd-control-plane",
+  "version": 1,
+  "weekStart": "",
+  "gnetId": 24984,
+  "description": "Comprehensive observability dashboard for the Linkerd service mesh control plane. Provides a top-to-bottom view of control plane health \u2014 from a single-glance health summary at the top, through internal gRPC and HTTP traffic, endpoint discovery, certificate lifecycle, Kubernetes informer latency, Go runtime resource usage, and Buoyant Enterprise\u2013specific features including external workload autoregistration, controller work queues, and the license controller.\r\n\r\nUse this dashboard as your primary diagnostic tool whenever the control plane behaves unexpectedly: proxies returning errors, endpoint routing going stale, certificates failing to rotate, or a rollout causing unexpected restarts."
+}

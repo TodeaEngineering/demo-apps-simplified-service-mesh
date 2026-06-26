@@ -1,0 +1,58 @@
+# The traffic clients — the only workloads that generate load. Each runs the
+# unified client image, polls the dashboard for live config, and POSTs every
+# outcome to /api/report:
+#   - client-http           HTTP, meshed
+#   - client-grpc-meshed    gRPC, meshed   (mTLS, honors the GRPCRoute canary)
+#   - client-grpc-unmeshed  gRPC, unmeshed (plaintext on the wire, DENIED by authz)
+# The MARKER rides in each payload so the "Wire capture" can spot it in cleartext.
+{{- if .Values.clients.enabled }}
+{{- $ns := .Release.Namespace }}
+{{- $clients := list
+      (dict "name" "client-http"          "protocol" "http" "meshed" true  "marker" "PLAINTEXT_HTTP"     "inject" true)
+      (dict "name" "client-grpc-meshed"   "protocol" "grpc" "meshed" true  "marker" "MESHED_ENCRYPTED"   "inject" true)
+      (dict "name" "client-grpc-unmeshed" "protocol" "grpc" "meshed" false "marker" "PLAINTEXT_UNMESHED" "inject" false)
+}}
+{{- range $c := $clients }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $c.name }}
+  namespace: {{ $ns }}
+  labels:
+    app: {{ $c.name }}
+    role: client
+    {{- include "demo.labels" $ | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: {{ $c.name }} }
+  template:
+    metadata:
+      labels: { app: {{ $c.name }}, role: client }
+      annotations:
+        {{- if $c.inject }}
+        {{- include "demo.meshAnnotation" $ | nindent 8 }}
+        {{- else }}
+        linkerd.io/inject: disabled
+        {{- end }}
+    spec:
+      containers:
+        - name: client
+          image: {{ $.Values.images.client }}
+          imagePullPolicy: {{ $.Values.images.pullPolicy }}
+          env:
+            - { name: CLIENT_NAME, value: {{ $c.name | quote }} }
+            - { name: PROTOCOL, value: {{ $c.protocol | quote }} }
+            - { name: MESHED, value: {{ $c.meshed | quote }} }
+            - { name: MARKER, value: {{ $c.marker | quote }} }
+            - { name: HTTP_TARGET, value: "http://http-server.{{ $ns }}.svc:8080" }
+            - { name: GRPC_TARGET, value: "grpc-server.{{ $ns }}.svc:50051" }
+            - { name: CONFIG_URL, value: "http://dashboard.{{ $ns }}.svc:3000/api/config" }
+            - { name: REPORT_URL, value: "http://dashboard.{{ $ns }}.svc:3000/api/report" }
+            - { name: PROTO_PATH, value: "/app/proto/echo.proto" }
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { cpu: 200m, memory: 192Mi } # tsx/esbuild needs headroom; 96Mi OOM-kills
+{{- end }}
+{{- end }}

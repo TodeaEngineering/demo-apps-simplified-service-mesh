@@ -1,0 +1,38 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Node / TypeScript (demo/ has its own .gitignore; these are repo-wide safety nets)
+node_modules/
+dist/
+out/
+build/
+*.tsbuildinfo
+
+# Next.js
+.next/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+settings.sh
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*~
+
+# Helm
+charts/
+*.tgz

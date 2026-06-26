@@ -1,0 +1,9 @@
+# Buoyant Enterprise for Linkerd trial credentials — never commit.
+# Free trial: https://enterprise.buoyant.io/start_trial
+#   cp settings.sh.example settings.sh   # then paste your values
+#   source settings.sh                   # before `make mesh`
+#
+# Leave these unset to install open-source Linkerd instead (make mesh detects it).
+export API_CLIENT_ID=""
+export API_CLIENT_SECRET=""
+export BUOYANT_LICENSE=""

@@ -1,0 +1,18 @@
+apiVersion: v2
+name: kcd-kl-2026
+description: gRPC canary + mesh security demo (KCD Kuala Lumpur) with optional Prometheus + Grafana
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+# Prometheus and Grafana are optional subcharts, toggled independently via
+# .Values.prometheus.enabled / .Values.grafana.enabled (the `condition` below).
+dependencies:
+  - name: prometheus
+    version: "29.13.0"
+    repository: https://prometheus-community.github.io/helm-charts
+    condition: prometheus.enabled
+  - name: grafana
+    version: "10.5.15"
+    repository: https://grafana.github.io/helm-charts
+    condition: grafana.enabled

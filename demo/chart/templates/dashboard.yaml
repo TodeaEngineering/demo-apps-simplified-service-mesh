@@ -1,0 +1,158 @@
+# Dashboard (Next.js), meshed. It generates no traffic — the client pods do and
+# POST their results to /api/report; the dashboard aggregates and steers them via
+# /api/config. Also hosts the live controls (sniff + authorization toggle), which
+# is why it carries a ServiceAccount + RBAC and is exposed via Ingress.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: dashboard
+    role: dashboard
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.dashboard.replicas }}
+  selector:
+    matchLabels: { app: dashboard }
+  template:
+    metadata:
+      labels: { app: dashboard, role: dashboard }
+      annotations:
+        {{- include "demo.meshAnnotation" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ if .Values.liveControls.enabled }}dashboard{{ else }}default{{ end }}
+      containers:
+        - name: app
+          image: {{ .Values.images.dashboard }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          env:
+            # Shown for reference in the UI (the clients call these, not the dashboard).
+            - { name: HTTP_TARGET, value: "http://http-server.{{ .Release.Namespace }}.svc:8080" }
+            - { name: GRPC_TARGET, value: "grpc-server.{{ .Release.Namespace }}.svc:50051" }
+            - { name: PORT, value: "3000" }
+            - { name: MESH_ENABLED, value: {{ .Values.mesh.enabled | quote }} }
+            # Next binds to $HOSTNAME; k8s would set it to the pod name, so pin it.
+            - { name: HOSTNAME, value: "0.0.0.0" }
+            # For the live controls (sniff + policy toggle).
+            - { name: LINKERD_NAMESPACE, value: {{ .Values.linkerd.namespace | quote }} }
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            {{- if .Values.prometheus.enabled }}
+            - { name: PROMETHEUS_URL, value: {{ ternary (printf "http://prometheus.%s" .Values.ingress.host) .Values.observability.prometheusUrl .Values.ingress.enabled | quote }} }
+            {{- end }}
+            {{- if .Values.grafana.enabled }}
+            - { name: GRAFANA_URL, value: {{ ternary (printf "http://grafana.%s" .Values.ingress.host) .Values.observability.grafanaUrl .Values.ingress.enabled | quote }} }
+            {{- end }}
+          ports:
+            - { name: http, containerPort: 3000 }
+          readinessProbe:
+            httpGet: { path: /api/health, port: 3000 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  selector: { app: dashboard }
+  ports:
+    - { name: http, port: 3000, targetPort: 3000 }
+
+# --- Ingress (demo.<ingress.host>) — reachable without port-forward; *.localhost
+#     resolves to 127.0.0.1 in Chrome/Firefox. Needs the k3d loadbalancer to
+#     expose host port 80 → Traefik (see docs/deployment.md).
+{{- if .Values.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: demo.{{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dashboard
+                port: { number: 3000 }
+{{- end }}
+
+# --- RBAC for the live controls. The dashboard runs kubectl against the cluster,
+#     so its ServiceAccount needs to debug grpc-server pods and manage the
+#     authorization policy + canary. Gated off with liveControls.enabled=false
+#     (the dashboard then falls back to the default SA above).
+{{- if .Values.liveControls.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+rules:
+  # find the grpc-server pod + read the tcpdump output
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  # attach an ephemeral tcpdump container (kubectl debug) and stream it
+  - apiGroups: [""]
+    resources: ["pods/ephemeralcontainers"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["pods/attach", "pods/exec"]
+    verbs: ["create", "get"]
+  # apply / remove the gRPC authorization policy
+  - apiGroups: ["policy.linkerd.io"]
+    resources: ["servers", "authorizationpolicies", "meshtlsauthentications"]
+    verbs: ["get", "list", "create", "delete", "patch", "update"]
+  # shift the gRPC canary (GRPCRoute weights) from the dashboard
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["grpcroutes"]
+    verbs: ["get", "list", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dashboard
+subjects:
+  - kind: ServiceAccount
+    name: dashboard
+    namespace: {{ .Release.Namespace }}
+{{- end }}

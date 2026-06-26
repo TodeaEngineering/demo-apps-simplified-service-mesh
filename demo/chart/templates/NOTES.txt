@@ -1,0 +1,28 @@
+
+{{ .Chart.Name }} {{ .Chart.Version }} deployed to namespace "{{ .Release.Namespace }}" (release "{{ .Release.Name }}").
+
+Mesh: {{ if .Values.mesh.enabled }}ENABLED{{ else }}disabled{{ end }}  ·  Canary v1/v2: {{ .Values.canary.v1Weight }}/{{ .Values.canary.v2Weight }}  ·  Authorization: {{ if .Values.authorization.enabled }}ENFORCED{{ else }}off{{ end }}
+
+▶ Dashboard
+{{- if .Values.ingress.enabled }}
+    open http://demo.{{ .Values.ingress.host }}     # or: make ui (port-forward fallback)
+{{- else }}
+    kubectl -n {{ .Release.Namespace }} port-forward deploy/dashboard 3000:3000
+    open http://localhost:3000
+{{- end }}
+{{- if .Values.prometheus.enabled }}
+
+▶ Prometheus (scraping Linkerd proxies + control plane)
+    kubectl -n {{ .Release.Namespace }} port-forward svc/{{ .Release.Name }}-prometheus-server 9090:80
+    open http://localhost:9090
+    # try a query:  request_total{direction="outbound"}
+{{- end }}
+{{- if .Values.grafana.enabled }}
+
+▶ Grafana (user: {{ .Values.grafana.adminUser }} / pass: {{ .Values.grafana.adminPassword }})
+    kubectl -n {{ .Release.Namespace }} port-forward svc/{{ .Release.Name }}-grafana 3001:80
+    open http://localhost:3001
+{{- end }}
+
+Toggle subcharts:  helm upgrade {{ .Release.Name }} ... --set prometheus.enabled=false --set grafana.enabled=false
+Showcases:         make canary V1=50 V2=50  ·  make authz  ·  make sniff

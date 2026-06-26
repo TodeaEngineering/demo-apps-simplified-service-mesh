@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+dist/
+*.log
+.DS_Store
+.env
+.env.local
+# Buoyant trial credentials — never commit
+settings.sh
+# Helm subcharts (fetched/unpacked via `make deps`); Chart.lock is committed
+chart/charts/

@@ -1,0 +1,98 @@
+# Observability wiring: provision the in-chart Prometheus as a Grafana datasource,
+# auto-import the dashboards from chart/dashboards/*.json, and expose Prometheus +
+# Grafana via Ingress. All gated on the prometheus/grafana subcharts (and ingress).
+
+# --- Grafana datasource (the in-chart Prometheus). The Grafana sidecar
+#     (grafana.sidecar.datasources) watches for ConfigMaps with this label.
+{{- if and .Values.grafana.enabled .Values.prometheus.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource-prometheus
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{ .Values.grafana.sidecar.datasources.label | default "grafana_datasource" }}: "1"
+    {{- include "demo.labels" . | nindent 4 }}
+data:
+  prometheus-datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus # stable uid so imported dashboards can bind ${DS_PROMETHEUS}
+        access: proxy
+        url: http://{{ .Release.Name }}-prometheus-server.{{ .Release.Namespace }}.svc
+        isDefault: true
+{{- end }}
+
+# --- Auto-import the dashboards staged in chart/dashboards/:
+#       todea-data-plane.json      (the custom Todea data-plane dashboard)
+#       linkerd-control-plane.json (grafana.com 24984)
+#     The Grafana sidecar (grafana.sidecar.dashboards) imports any ConfigMap with
+#     the dashboard label; ${DS_PROMETHEUS} is resolved to the datasource uid above.
+{{- if and .Values.grafana.enabled .Values.prometheus.enabled }}
+{{- $dsUid := "prometheus" }}
+{{- $label := .Values.grafana.sidecar.dashboards.label | default "grafana_dashboard" }}
+{{- range $path, $_ := .Files.Glob "dashboards/*.json" }}
+{{- $name := base $path | trimSuffix ".json" }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $.Release.Name }}-dashboard-{{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{ $label }}: "1"
+    {{- include "demo.labels" $ | nindent 4 }}
+data:
+  {{ $name }}.json: |-
+{{ $.Files.Get $path | replace "${DS_PROMETHEUS}" $dsUid | indent 4 }}
+{{- end }}
+{{- end }}
+
+# --- Prometheus + Grafana Ingress (prometheus.<host> / grafana.<host>) ---
+{{- if and .Values.ingress.enabled .Values.prometheus.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prometheus
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: prometheus.{{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-prometheus-server
+                port: { number: 80 }
+{{- end }}
+{{- if and .Values.ingress.enabled .Values.grafana.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: grafana.{{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-grafana
+                port: { number: 80 }
+{{- end }}

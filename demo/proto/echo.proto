@@ -1,0 +1,31 @@
+// Shared contract for the service-mesh demo.
+//
+// One tiny unary RPC. The request carries a sequence number and an opaque
+// payload (so we can vary message size); the response echoes them back along
+// with the responding instance's identity — name, pod, and VERSION. The
+// version is what powers the live canary view: with a GRPCRoute splitting
+// traffic across grpc-server v1/v2, the dashboard shows the weighted mix.
+//
+// This file is the canonical source. The grpc-server, dashboard and client
+// each vendor a byte-for-byte copy under their own `proto/` dir so they build
+// as independent Docker contexts. Keep them in sync.
+syntax = "proto3";
+
+package echo;
+
+service EchoService {
+  rpc Echo (EchoRequest) returns (EchoResponse);
+}
+
+message EchoRequest {
+  int64  seq     = 1;  // monotonic counter from the generator
+  string payload = 2;   // opaque bytes-as-string, sized by the UI
+}
+
+message EchoResponse {
+  int64  seq     = 1;  // echoed back
+  string server  = 2;  // logical name, e.g. "grpc-server"
+  string pod     = 3;  // hostname / pod name that handled the call
+  int64  bytes   = 4;  // payload length the server saw
+  string version = 5;   // "v1" / "v2" — the canary dimension
+}

@@ -1,0 +1,20 @@
+{
+  "name": "kcd-kl-2026-client",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Unified HTTP/gRPC traffic client for the demo — polls the dashboard for config and reports outcomes",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.12.5",
+    "@grpc/proto-loader": "^0.7.13",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2"
+  }
+}

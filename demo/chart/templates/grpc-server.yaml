@@ -1,0 +1,141 @@
+# Everything scoped to grpc-server: the v1/v2 Deployments (the canary), their
+# Services, the GRPCRoute that splits traffic between them, and the optional
+# authorization policy.
+
+# --- Deployments (two versions, both meshed; same image, VERSION differs) ---
+{{- range $v := list "v1" "v2" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grpc-server-{{ $v }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: grpc-server
+    role: server
+    version: {{ $v }}
+    {{- include "demo.labels" $ | nindent 4 }}
+spec:
+  replicas: {{ $.Values.grpcServer.replicas }}
+  selector:
+    matchLabels: { app: grpc-server, version: {{ $v }} }
+  template:
+    metadata:
+      labels: { app: grpc-server, role: server, version: {{ $v }} }
+      annotations:
+        {{- include "demo.meshAnnotation" $ | nindent 8 }}
+    spec:
+      containers:
+        - name: app
+          image: {{ $.Values.images.grpcServer }}
+          imagePullPolicy: {{ $.Values.images.pullPolicy }}
+          env:
+            - { name: SERVER_NAME, value: "grpc-server" }
+            - { name: VERSION, value: {{ $v | quote }} }
+            - { name: PORT, value: "50051" }
+          ports:
+            - { name: grpc, containerPort: 50051 }
+          readinessProbe:
+            tcpSocket: { port: 50051 }
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 25m, memory: 48Mi }
+            limits: { cpu: 250m, memory: 128Mi }
+{{- end }}
+
+# --- Services. The `grpc-server` parent Service selects ONLY v1, so an unmeshed
+#     client always lands on v1; the GRPCRoute splits a meshed client v1/v2.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grpc-server
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  selector: { app: grpc-server, version: v1 }
+  ports:
+    - { name: grpc, port: 50051, targetPort: 50051, appProtocol: kubernetes.io/h2c }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grpc-server-v2
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  selector: { app: grpc-server, version: v2 }
+  ports:
+    - { name: grpc, port: 50051, targetPort: 50051, appProtocol: kubernetes.io/h2c }
+
+# --- Gateway API GRPCRoute — the canary. Outbound policy on the `grpc-server`
+#     Service, so only the meshed client's proxy honors the split.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: grpc-server-canary
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - group: core
+      kind: Service
+      name: grpc-server
+      port: 50051
+  rules:
+    - backendRefs:
+        - { group: core, kind: Service, name: grpc-server,    port: 50051, weight: {{ .Values.canary.v1Weight }} }
+        - { group: core, kind: Service, name: grpc-server-v2, port: 50051, weight: {{ .Values.canary.v2Weight }} }
+
+# --- Authorization. Creating a Server flips the port to default-deny; the
+#     AuthorizationPolicy then allows only meshed identities. Gated by
+#     .Values.authorization.enabled — or toggled live from the dashboard's
+#     "Authorization policy" button (which applies/deletes these same resources).
+{{- if .Values.authorization.enabled }}
+---
+apiVersion: policy.linkerd.io/v1beta3
+kind: Server
+metadata:
+  name: grpc-server
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: { app: grpc-server }
+  port: grpc
+  proxyProtocol: gRPC
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: MeshTLSAuthentication
+metadata:
+  name: meshed-identities
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  identities:
+    - "*.{{ .Release.Namespace }}.serviceaccount.identity.{{ .Values.linkerd.namespace }}.cluster.local"
+---
+apiVersion: policy.linkerd.io/v1alpha1
+kind: AuthorizationPolicy
+metadata:
+  name: grpc-server-require-identity
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  targetRef:
+    group: policy.linkerd.io
+    kind: Server
+    name: grpc-server
+  requiredAuthenticationRefs:
+    - group: policy.linkerd.io
+      kind: MeshTLSAuthentication
+      name: meshed-identities
+{{- end }}
